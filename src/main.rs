@@ -10,7 +10,9 @@ async fn main() -> std::io::Result<()> {
 
     let hello = warp::path!("event_handler")
         .and(verify_webhook_signature())
-        .and(process_event())
+        .and(warp::header::<String>("X-Github-Event"))
+        .and_then(process_event)
+        .untuple_one()
         .map(warp::reply::reply)
         .recover(handle_rejection);
 
@@ -20,7 +22,7 @@ async fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-fn verify_webhook_signature() -> BoxedFilter<()> {
+fn verify_webhook_signature() -> BoxedFilter<(Bytes, )> {
     use hmac::{Hmac, Mac, NewMac};
     use sha2::Sha256;
 
@@ -39,19 +41,15 @@ fn verify_webhook_signature() -> BoxedFilter<()> {
             if &*header_hash != hmac_hash {
                 return Err(warp::reject::custom(AppError::AuthFail));
             }
-            Ok(())
+            Ok(body)
         })
-        .untuple_one()
         .boxed()
 }
 
-fn process_event() -> BoxedFilter<()> {
-    warp::header::header::<String>("X-Github-Event")
-        .map(|event: String| {
-            log::info!("{}", event);
-        })
-        .untuple_one()
-        .boxed()
+async fn process_event(body: Bytes, event: String) -> Result<(), Rejection> {
+    log::info!("event: {}", event);
+    log::info!("body : {}", std::str::from_utf8(&body).unwrap_or("unknown"));
+    Ok(())
 }
 
 #[derive(Debug)]
