@@ -10,6 +10,7 @@ async fn main() -> std::io::Result<()> {
 
     let hello = warp::path!("event_handler")
         .and(verify_webhook_signature())
+        .and(process_event())
         .map(warp::reply::reply)
         .recover(handle_rejection);
 
@@ -39,6 +40,15 @@ fn verify_webhook_signature() -> BoxedFilter<()> {
                 return Err(warp::reject::custom(AppError::AuthFail));
             }
             Ok(())
+        })
+        .untuple_one()
+        .boxed()
+}
+
+fn process_event() -> BoxedFilter<()> {
+    warp::header::header::<String>("X-Github-Event")
+        .map(|event: String| {
+            log::info!("{}", event);
         })
         .untuple_one()
         .boxed()
